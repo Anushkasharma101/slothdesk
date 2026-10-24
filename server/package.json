@@ -1,0 +1,26 @@
+{
+  "name": "slothdesk-server",
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "node --test",
+    "test:unit": "node --test test/organizer.test.js test/auth.test.js test/http.test.js"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "mongoose": "^8.12.1",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.2.0",
+    "supertest": "^7.1.0",
+    "yauzl": "^3.4.0"
+  }
+}

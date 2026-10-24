@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: slothdesk
+    runtime: node
+    plan: starter
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    disk:
+      name: slothdesk-uploads
+      mountPath: /var/data/slothdesk
+      sizeGB: 10
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22
+      - key: MONGODB_URI
+        sync: false
+      - key: STORAGE_DIR
+        value: /var/data/slothdesk
+      - key: TRUST_PROXY
+        value: 1
+# Render supplies RENDER_EXTERNAL_URL. APP_ORIGIN overrides it for a custom domain.
+# This uses paid compute/storage. Check the provider's current price before creating.

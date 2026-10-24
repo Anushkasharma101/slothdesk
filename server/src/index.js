@@ -1,0 +1,27 @@
+import dotenv from 'dotenv';
+import dns from 'node:dns';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import mongoose from 'mongoose';
+import {createApp} from './app.js';
+import {User,Job,Session,Summary,Slots} from './models.js';
+import {cleanup,reconcile,makeSummary,dayKey} from './storage.js';
+import {metrics} from './organizer.js';
+dotenv.config({path:fileURLToPath(new URL('../.env',import.meta.url))});
+const production=process.env.NODE_ENV==='production';
+if(process.env.DNS_SERVERS)dns.setServers(process.env.DNS_SERVERS.split(',').map(s=>s.trim()));
+const origin=process.env.APP_ORIGIN||process.env.RENDER_EXTERNAL_URL||(!production?'http://localhost:5173':'');
+if(!origin||new URL(origin).origin!==origin||(production&&!origin.startsWith('https://')))throw Error('APP_ORIGIN must be an exact origin (HTTPS in production), with no trailing slash.');
+const storage=path.resolve(process.env.STORAGE_DIR||fileURLToPath(new URL('../storage',import.meta.url)));
+await fs.mkdir(storage,{recursive:true,mode:0o700});
+try{await mongoose.connect(process.env.MONGODB_URI||'mongodb://127.0.0.1:27017/slothdesk_public',{serverSelectionTimeoutMS:10000});}catch(e){console.error('MongoDB startup failed:',e.message,'Check MONGODB_URI, Atlas network access and DNS_SERVERS.');process.exit(1);}
+await Promise.all([User.init(),Session.init(),Job.init(),Summary.init(),Slots.init()]);await reconcile();await cleanup(storage);
+const app=createApp({storage,origin,production,trustProxy:Number(process.env.TRUST_PROXY||0)});
+const port=Number(process.env.PORT)||4100;
+const server=app.listen(port,production?'0.0.0.0':'127.0.0.1',()=>console.log(`SlothDesk API ready on port ${port}. Open ${origin}`));
+server.requestTimeout=120000;
+let maintenance=false;
+const timer=setInterval(async()=>{if(maintenance)return;maintenance=true;try{await cleanup(storage);for await(const user of User.find({dailyDigest:true}).cursor()){if(!await Summary.exists({owner:user._id,day:dayKey()})){const jobs=await Job.find({owner:user._id,state:'ready',expiresAt:{$gt:new Date()}});if(jobs.length)await makeSummary(user._id,metrics(jobs));}}}catch(e){console.error('Maintenance:',e.message);}finally{maintenance=false;}},60000);
+timer.unref();
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{clearInterval(timer);server.close(async()=>{await mongoose.disconnect();process.exit(0);});setTimeout(()=>process.exit(1),25000).unref();});
